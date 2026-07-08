@@ -1,0 +1,30 @@
+name: Refresh Google OAuth certs
+
+on:
+  schedule:
+    - cron: "23 */6 * * *"   # every 6h; certs rotate ~daily with overlap
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch current certs
+        run: |
+          curl -sf --retry 3 https://www.googleapis.com/oauth2/v1/certs -o certs.json
+          python3 -m json.tool certs.json > /dev/null   # refuse to commit non-JSON
+      - name: Commit if changed
+        run: |
+          if ! git diff --quiet certs.json; then
+            git config user.name  "certs-refresh-bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add certs.json
+            git commit -m "refresh certs $(date -u +%FT%TZ)"
+            git push
+          else
+            echo "certs unchanged"
+          fi
